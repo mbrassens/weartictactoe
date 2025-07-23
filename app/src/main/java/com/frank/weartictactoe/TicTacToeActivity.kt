@@ -23,6 +23,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
 
 class TicTacToeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,38 +43,104 @@ fun TicTacToePager() {
     var xScore by rememberSaveable { mutableStateOf(0) }
     var oScore by rememberSaveable { mutableStateOf(0) }
     var startingPlayer by rememberSaveable { mutableStateOf("X") }
-    var resetKey by remember { mutableStateOf(0) } // To force recomposition on reset
+
+    // Game state is now managed here and passed down
+    var board by rememberSaveable { mutableStateOf(List(3) { MutableList(3) { "" } }) }
+    var currentPlayer by rememberSaveable { mutableStateOf(startingPlayer) }
+    var winner by rememberSaveable { mutableStateOf<String?>(null) }
+    var isDraw by rememberSaveable { mutableStateOf(false) }
+    var winningCells by rememberSaveable { mutableStateOf<List<Pair<Int, Int>>>(emptyList()) }
+
+    fun checkWinner(board: List<List<String>>): Pair<String?, List<Pair<Int, Int>>> {
+        // Rows and columns
+        for (i in 0..2) {
+            if (board[i][0] != "" && board[i][0] == board[i][1] && board[i][1] == board[i][2]) {
+                return board[i][0] to listOf(Pair(i, 0), Pair(i, 1), Pair(i, 2))
+            }
+            if (board[0][i] != "" && board[0][i] == board[1][i] && board[1][i] == board[2][i]) {
+                return board[0][i] to listOf(Pair(0, i), Pair(1, i), Pair(2, i))
+            }
+        }
+        // Diagonals
+        if (board[0][0] != "" && board[0][0] == board[1][1] && board[1][1] == board[2][2]) {
+            return board[0][0] to listOf(Pair(0, 0), Pair(1, 1), Pair(2, 2))
+        }
+        if (board[0][2] != "" && board[0][2] == board[1][1] && board[1][1] == board[2][0]) {
+            return board[0][2] to listOf(Pair(0, 2), Pair(1, 1), Pair(2, 0))
+        }
+        return null to emptyList()
+    }
+
+    fun checkDraw(board: List<List<String>>): Boolean {
+        return board.all { row -> row.all { it != "" } } && winner == null
+    }
+
+    fun handleCellClick(row: Int, col: Int) {
+        if (board[row][col] == "" && winner == null && !isDraw) {
+            val newBoard = board.map { it.toMutableList() }.toMutableList()
+            newBoard[row][col] = currentPlayer
+            board = newBoard
+            val (win, winCells) = checkWinner(newBoard)
+            winner = win
+            winningCells = winCells
+            isDraw = checkDraw(newBoard)
+            if (winner == null && !isDraw) {
+                currentPlayer = if (currentPlayer == "X") "O" else "X"
+            }
+            if (winner != null) {
+                if (winner == "X") xScore++
+                if (winner == "O") oScore++
+            }
+        }
+    }
+
+    fun restartGame() {
+        // Alternate starting player after each game restart
+        startingPlayer = if (startingPlayer == "X") "O" else "X"
+        board = List(3) { MutableList(3) { "" } }
+        currentPlayer = startingPlayer
+        winner = null
+        isDraw = false
+        winningCells = emptyList()
+    }
+
+    fun resetScores() {
+        xScore = 0
+        oScore = 0
+        startingPlayer = "X"
+        board = List(3) { MutableList(3) { "" } }
+        currentPlayer = startingPlayer
+        winner = null
+        isDraw = false
+        winningCells = emptyList()
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         HorizontalPager(state = pagerState) { page ->
             when (page) {
                 0 -> TicTacToeScreen(
-                    xScore = xScore,
-                    oScore = oScore,
-                    startingPlayer = startingPlayer,
-                    onPlayerWin = { winner ->
-                        if (winner == "X") xScore++
-                        if (winner == "O") oScore++
-                    },
-                    onRestart = {
-                        // Alternate starting player after each game restart
-                        startingPlayer = if (startingPlayer == "X") "O" else "X"
-                        resetKey++
-                    },
-                    resetKey = resetKey
+                    board = board,
+                    currentPlayer = currentPlayer,
+                    winner = winner,
+                    isDraw = isDraw,
+                    winningCells = winningCells,
+                    onCellClick = ::handleCellClick,
+                    onRestart = ::restartGame
                 )
                 1 -> ScoreboardScreen(
                     xScore = xScore,
                     oScore = oScore,
-                    onResetScores = {
-                        xScore = 0
-                        oScore = 0
-                        startingPlayer = "X" // Always X after score reset
-                        resetKey++
-                    }
+                    onResetScores = ::resetScores
                 )
             }
         }
+        SimplePagerIndicator(
+            currentPage = pagerState.currentPage,
+            pageCount = 2,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 8.dp)
+        )
     }
 }
 
@@ -115,54 +182,16 @@ fun ScoreboardScreen(xScore: Int, oScore: Int, onResetScores: () -> Unit) {
 
 @Composable
 fun TicTacToeScreen(
-    xScore: Int,
-    oScore: Int,
-    startingPlayer: String,
-    onPlayerWin: (String) -> Unit,
-    onRestart: () -> Unit,
-    resetKey: Int
+    board: List<List<String>>,
+    currentPlayer: String,
+    winner: String?,
+    isDraw: Boolean,
+    winningCells: List<Pair<Int, Int>>,
+    onCellClick: (Int, Int) -> Unit,
+    onRestart: () -> Unit
 ) {
-    var board by remember(resetKey) { mutableStateOf(List(3) { MutableList(3) { "" } }) }
-    var currentPlayer by remember(resetKey) { mutableStateOf(startingPlayer) }
-    var winner by remember(resetKey) { mutableStateOf<String?>(null) }
-    var isDraw by remember(resetKey) { mutableStateOf(false) }
-    var winningCells by remember(resetKey) { mutableStateOf<List<Pair<Int, Int>>>(emptyList()) }
-
     val winColor = Color(0xFF90CAF9) // Light blue
     val winTextColor = Color(0xFF0D47A1) // Dark blue
-
-    fun checkWinner(): String? {
-        // Rows and columns
-        for (i in 0..2) {
-            if (board[i][0] != "" && board[i][0] == board[i][1] && board[i][1] == board[i][2]) {
-                winningCells = listOf(Pair(i, 0), Pair(i, 1), Pair(i, 2))
-                return board[i][0]
-            }
-            if (board[0][i] != "" && board[0][i] == board[1][i] && board[1][i] == board[2][i]) {
-                winningCells = listOf(Pair(0, i), Pair(1, i), Pair(2, i))
-                return board[0][i]
-            }
-        }
-        // Diagonals
-        if (board[0][0] != "" && board[0][0] == board[1][1] && board[1][1] == board[2][2]) {
-            winningCells = listOf(Pair(0, 0), Pair(1, 1), Pair(2, 2))
-            return board[0][0]
-        }
-        if (board[0][2] != "" && board[0][2] == board[1][1] && board[1][1] == board[2][0]) {
-            winningCells = listOf(Pair(0, 2), Pair(1, 1), Pair(2, 0))
-            return board[0][2]
-        }
-        winningCells = emptyList()
-        return null
-    }
-
-    fun checkDraw(): Boolean {
-        return board.all { row -> row.all { it != "" } } && winner == null
-    }
-
-    fun resetGame() {
-        onRestart()
-    }
 
     Column(
         modifier = Modifier
@@ -212,19 +241,7 @@ fun TicTacToeScreen(
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (isWinningCell) winColor else Color.DarkGray)
                                 .clickable(enabled = board[row][col] == "" && winner == null && !isDraw) {
-                                    if (board[row][col] == "" && winner == null && !isDraw) {
-                                        val newBoard = board.map { it.toMutableList() }.toMutableList()
-                                        newBoard[row][col] = currentPlayer
-                                        board = newBoard
-                                        winner = checkWinner()
-                                        isDraw = checkDraw()
-                                        if (winner == null && !isDraw) {
-                                            currentPlayer = if (currentPlayer == "X") "O" else "X"
-                                        }
-                                        if (winner != null) {
-                                            onPlayerWin(winner!!)
-                                        }
-                                    }
+                                    onCellClick(row, col)
                                 }
                         ) {
                             Text(
@@ -240,7 +257,7 @@ fun TicTacToeScreen(
         }
         Spacer(modifier = Modifier.height(8.dp))
         androidx.wear.compose.material.Button(
-            onClick = { resetGame() },
+            onClick = onRestart,
             modifier = Modifier
                 .padding(bottom = 4.dp)
                 .height(24.dp)
@@ -252,10 +269,39 @@ fun TicTacToeScreen(
     }
 }
 
+@Composable
+fun SimplePagerIndicator(currentPage: Int, pageCount: Int, modifier: Modifier = Modifier) {
+    Row(
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+    ) {
+        repeat(pageCount) { index ->
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .padding(2.dp)
+                    .background(
+                        color = if (index == currentPage) Color(0xFF90CAF9) else Color.LightGray,
+                        shape = CircleShape
+                    )
+            )
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 fun TicTacToeScreenPreview() {
     MaterialTheme {
-        TicTacToeScreen(0, 0, "X", {}, {}, 0)
+        TicTacToeScreen(
+            board = List(3) { MutableList(3) { "" } },
+            currentPlayer = "X",
+            winner = null,
+            isDraw = false,
+            winningCells = emptyList(),
+            onCellClick = { _, _ -> },
+            onRestart = {}
+        )
     }
 } 
