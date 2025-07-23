@@ -24,6 +24,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.CircleShape
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
+import android.content.ComponentName
+import androidx.wear.tiles.TileService
 
 class TicTacToeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,6 +47,16 @@ fun TicTacToePager() {
     var xScore by rememberSaveable { mutableStateOf(0) }
     var oScore by rememberSaveable { mutableStateOf(0) }
     var startingPlayer by rememberSaveable { mutableStateOf("X") }
+
+    val context = LocalContext.current
+    // Save scores to SharedPreferences whenever they change
+    LaunchedEffect(xScore, oScore) {
+        val prefs = context.getSharedPreferences("tictactoe_scores", Context.MODE_PRIVATE)
+        prefs.edit().putInt("xScore", xScore).putInt("oScore", oScore).apply()
+
+        // Request tile update
+        TileService.getUpdater(context).requestUpdate(ScoreboardTileService::class.java)
+    }
 
     // Game state is now managed here and passed down
     var board by rememberSaveable { mutableStateOf(List(3) { MutableList(3) { "" } }) }

@@ -50,4 +50,9 @@ dependencies {
     debugImplementation "androidx.compose.ui:ui-tooling:1.5.4"
     // Official Compose Pager
     implementation "androidx.compose.foundation:foundation:1.5.4"
+    // Wear Tiles Dependencies
+    implementation "androidx.wear.tiles:tiles:1.5.0"
+    implementation "androidx.wear.tiles:tiles-material:1.5.0"
+    // Guava for ListenableFuture (Wear Tiles)
+    implementation 'com.google.guava:guava:31.1-android'
 }
